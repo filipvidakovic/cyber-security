@@ -16,7 +16,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-
 @RestController
 @RequiredArgsConstructor
 @CrossOrigin(origins="*")
@@ -45,8 +44,7 @@ public class AuthController {
         return ResponseEntity.ok(new LoginResponseDto(authenticatedUser.getId(),
                 authenticatedUser.getEmail(),
                 token,
-                authenticatedUser.getUserRole(),
-                null));
+                authenticatedUser.getUserRole()));
     }
 
     @PostMapping("/signup")
