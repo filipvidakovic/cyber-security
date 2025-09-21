@@ -51,6 +51,9 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                                 new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                         SecurityContextHolder.getContext().setAuthentication(authToken);
+                        System.out.println("Auth OK: email={}, authorities={}"+
+                                userDetails.getUsername()+
+                                userDetails.getAuthorities());
                     }
 
                 } catch (IllegalArgumentException e) {
