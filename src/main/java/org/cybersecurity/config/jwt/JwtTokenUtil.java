@@ -18,12 +18,12 @@ public class JwtTokenUtil implements Serializable {
     private String SECRET_KEY;
 
     // Generate a JWT token
-    public String generateToken(String username) {
+    public String generateToken(String username, long expirationMillis) {
         Algorithm algorithm = Algorithm.HMAC256(SECRET_KEY);
         return JWT.create()
                 .withSubject(username)
                 .withIssuedAt(new Date())
-                .withExpiresAt(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
+                .withExpiresAt(new Date(System.currentTimeMillis() + expirationMillis))
                 .sign(algorithm);
     }
 
@@ -51,5 +51,14 @@ public class JwtTokenUtil implements Serializable {
     public boolean validateToken(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
         return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+    }
+
+    // Validate token without userDetails
+    public boolean validateToken(String token) {
+        try {
+            return !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
