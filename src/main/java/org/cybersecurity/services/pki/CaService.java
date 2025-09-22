@@ -34,7 +34,6 @@ public class CaService {
 
     @Transactional
     public Long createIntermediate(Long issuerId, String cn, Duration ttl) throws Exception {
-        System.out.println("USAO U CREATE INTERMEDIATE");
         CertificateEntity issuer = certRepo.findById(issuerId).orElseThrow();
         X509Certificate issuerCert = Pem.parseCert(issuer.getPem());
         PrivateKey issuerKey = loadIssuerPriv(issuerId);
@@ -83,7 +82,7 @@ public class CaService {
     // Mali helper za PEM → X509
     static class Pem {
         static X509Certificate parseCert(String pem) throws Exception {
-            String b64 = pem.replaceAll("-----\\w+ CERTIFICATE-----", "")
+            String b64 = pem.replaceAll("-----\\w+-----", "")
                     .replaceAll("\\s", "");
             byte[] der = java.util.Base64.getDecoder().decode(b64);
             var holder = new org.bouncycastle.cert.X509CertificateHolder(der);
