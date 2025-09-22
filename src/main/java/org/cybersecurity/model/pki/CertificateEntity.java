@@ -21,7 +21,7 @@ public class CertificateEntity {
     @Lob @Column(nullable=false) private String pem;
 
     private Long issuerId;
-    private Long orgId;
+    private String orgId;
 
     @PrePersist void onCreate(){ if (status==null) status = "VALID"; }
 }

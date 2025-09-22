@@ -1,7 +1,9 @@
 package org.cybersecurity.services.pki;
 
 import lombok.RequiredArgsConstructor;
+import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.cybersecurity.crypto.CryptoUtil;
 import org.cybersecurity.crypto.KeyVaultService;
@@ -27,21 +29,29 @@ public class EEIssueService {
 
     @Transactional
     public Long issueAutogen(Long issuerId, String cn, Duration ttl, boolean storePrivKey) throws Exception {
+        assertIssuerIsCA(issuerId);
         CertificateEntity issuer = certRepo.findById(issuerId).orElseThrow();
         ensureIssuerValid(issuer, ttl);
         X509Certificate issuerCert = CaService.Pem.parseCert(issuer.getPem());
         PrivateKey issuerKey = loadIssuerPriv(issuerId);
 
+        String orgId = getOrgId(cn);
+        // asserts that the organisations are the same if the issuer is CA_USER
+        if (issuer.getType().equals("INT") && !issuer.getOrgId().equalsIgnoreCase(orgId)){
+            throw new IllegalArgumentException("Issuer " + issuerId + " does not match orgId " + orgId);
+        }
+
         KeyPair kp = crypto.genRsa(3072);
-        X509Certificate ee = crypto.signChild(kp.getPublic(), new X500Name("CN="+cn),
+        X509Certificate ee = crypto.signChild(kp.getPublic(), new X500Name(cn),
                 issuerCert, issuerKey, false, ttl);
-        Long id = saveCert(ee, "EE", issuerId);
+        Long id = saveCert(ee, "EE", issuerId, getOrgId(cn));
         if (storePrivKey) saveKey(id, kp.getPrivate(), 3072);
         return id;
     }
 
     @Transactional
     public Long issueFromCsr(Long issuerId, byte[] csrPem, Duration ttl) throws Exception {
+        assertIssuerIsCA(issuerId);
         CertificateEntity issuer = certRepo.findById(issuerId).orElseThrow();
         ensureIssuerValid(issuer, ttl);
         X509Certificate issuerCert = CaService.Pem.parseCert(issuer.getPem());
@@ -51,8 +61,15 @@ public class EEIssueService {
         var spki = csr.getSubjectPublicKeyInfo();
         PublicKey pub = KeyFactory.getInstance("RSA", "BC")
                 .generatePublic(new java.security.spec.X509EncodedKeySpec(spki.getEncoded()));
+
+        String orgId = getOrgId(csr.getSubject().toString());
+        // asserts that the organisations are the same if the issuer is CA_USER
+        if (issuer.getType().equals("INT") && !issuer.getOrgId().equalsIgnoreCase(orgId)){
+            throw new IllegalArgumentException("Issuer " + issuerId + " does not match orgId " + orgId);
+        }
+
         X509Certificate ee = crypto.signChild(pub, csr.getSubject(), issuerCert, issuerKey, false, ttl);
-        return saveCert(ee, "EE", issuerId);
+        return saveCert(ee, "EE", issuerId, orgId);
     }
 
     private void ensureIssuerValid(CertificateEntity issuer, Duration ttl) {
@@ -61,7 +78,7 @@ public class EEIssueService {
         if (Instant.now().plus(ttl).isAfter(max)) throw new IllegalArgumentException("EE TTL exceeds issuer validity");
     }
 
-    private Long saveCert(X509Certificate c, String type, Long issuerId) throws Exception {
+    private Long saveCert(X509Certificate c, String type, Long issuerId, String orgId) throws Exception {
         CertificateEntity e = new CertificateEntity();
         e.setType(type);
         e.setSubjectDn(c.getSubjectX500Principal().getName());
@@ -72,6 +89,7 @@ public class EEIssueService {
         e.setPem(CryptoUtil.toPem(c));
         e.setIssuerId(issuerId);
         e.setStatus("VALID");
+        e.setOrgId(orgId);
         return certRepo.save(e).getId();
     }
 
@@ -88,6 +106,23 @@ public class EEIssueService {
         byte[] pkcs8 = vault.decrypt(blob.getEncBlob(), aad(issuerId));
         KeyFactory kf = KeyFactory.getInstance(blob.getAlgo(), "BC");
         return kf.generatePrivate(new java.security.spec.PKCS8EncodedKeySpec(pkcs8));
+    }
+
+    private void assertIssuerIsCA(Long issuerId) {
+        CertificateEntity issuer = certRepo.findById(issuerId)
+                .orElseThrow(() -> new IllegalArgumentException("Issuer not found: " + issuerId));
+
+        // Only ROOT or INT can issue
+        if ("EE".equalsIgnoreCase(issuer.getType())) {
+            throw new IllegalArgumentException("Issuer is not a CA (issuerId=" + issuerId + ")");
+        }
+    }
+
+    private String getOrgId(String cn){
+        X500Name x500Name = new X500Name(cn);
+        RDN[] orgRdns = x500Name.getRDNs(BCStyle.O);
+        String orgId = (orgRdns.length > 0) ? orgRdns[0].getFirst().getValue().toString() : null;
+        return orgId;
     }
 
     private byte[] aad(Long id){
