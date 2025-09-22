@@ -35,8 +35,7 @@ public class WebSecurityConfiguration {
 
     @Autowired
     private JwtRequestFilter jwtRequestFilter;
-    @Value("${frontend.url}")
-    private String frontendUrl;
+    private String frontendUrl = "http://localhost:5173";
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
