@@ -33,7 +33,6 @@ public class UserService implements UserDetailsService {
     }
 
     public boolean registerUser(RegisterUserDto registerUserDto) {
-        registerUserDto.setUserRole(UserRole.USER);
         registerUserDto.setPassword(passwordEncoder.encode(registerUserDto.getPassword()));
         userRepository.save(UserMapper.toEntity(registerUserDto));
         return true;

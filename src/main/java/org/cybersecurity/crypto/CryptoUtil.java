@@ -78,6 +78,6 @@ public class CryptoUtil {
 
     public static String toPem(X509Certificate cert) throws Exception {
         String base64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(cert.getEncoded());
-        return "-----BEGIN CERTIFICATE-----\n" + base64 + "\n-----END CERTIFICATE-----\n";
+        return "-----START-----\n" + base64 + "\n-----END-----\n";
     }
 }

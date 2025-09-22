@@ -31,7 +31,7 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
 
     private final JwtTokenUtil jwtTokenUtil;
-    private static final long TIME_15_MINUTES = 15 * 60 * 1000;
+    private static final long TIME_15_MINUTES = 15 * 60 * 10000;
     private static final long TIME_7_DAYS = 7 * 24 * 60 * 60 * 1000;
 
     @PostMapping("/login")
@@ -43,6 +43,7 @@ public class AuthController {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         BaseUser authenticatedUser = userService.getUserByEmail(request.getEmail());
+
 
         String accessToken = jwtTokenUtil.generateToken(authenticatedUser.getEmail(), TIME_15_MINUTES);
         String refreshToken = jwtTokenUtil.generateToken(authenticatedUser.getEmail(), TIME_7_DAYS);
@@ -79,6 +80,7 @@ public class AuthController {
 
     @PostMapping("/signup")
     public ResponseEntity<Boolean> registerUser (@Valid @RequestBody RegisterUserDto registerUserDto) {
+        System.out.println(registerUserDto.getUserRole());
         return userService.registerUser(registerUserDto)
                 ? ResponseEntity.ok(true)
                 : ResponseEntity.badRequest().build();
