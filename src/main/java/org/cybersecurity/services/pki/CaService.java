@@ -16,6 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.*;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+
+import static com.fasterxml.jackson.databind.type.LogicalType.DateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -27,10 +31,16 @@ public class CaService {
 
     @Transactional
     public Long createRoot(String cn, Duration ttl) throws Exception {
+        System.out.println("Creating root certificate for " + cn);
+        System.out.println(LocalDateTime.now());
         KeyPair kp = crypto.genRsa(4096);
+        System.out.println(LocalDateTime.now());
         X509Certificate root = crypto.selfSignedCa(kp, new X500Name(cn), ttl);
+        System.out.println(LocalDateTime.now());
         Long certId = saveCert(root, "ROOT", null, getOrgId(cn));
+        System.out.println(LocalDateTime.now());
         saveKey(certId, kp.getPrivate(), 4096);
+        System.out.println(LocalDateTime.now());
         return certId;
     }
 
@@ -38,7 +48,10 @@ public class CaService {
     public Long createIntermediate(Long issuerId, String cn, Duration ttl) throws Exception {
         assertIssuerIsValid(issuerId);
         CertificateEntity issuer = certRepo.findById(issuerId).orElseThrow();
+        validateChain(issuer);
         String orgId = getOrgId(cn);
+        Instant max = issuer.getNotAfter();
+        if (Instant.now().plus(ttl).isAfter(max)) throw new IllegalArgumentException("EE TTL exceeds issuer validity");
         // asserts that the organisations are the same if the issuer is CA_USER
         if (issuer.getType().equals("INT") && !issuer.getOrgId().equalsIgnoreCase(orgId)){
             throw new IllegalArgumentException("Issuer " + issuerId + " does not match orgId " + orgId);
@@ -77,7 +90,7 @@ public class CaService {
         keyRepo.save(b);
     }
 
-    private PrivateKey loadIssuerPriv(Long issuerId) throws Exception {
+    public PrivateKey loadIssuerPriv(Long issuerId) throws Exception {
         var blob = keyRepo.findByCertId(issuerId).orElseThrow();
         byte[] pkcs8 = vault.decrypt(blob.getEncBlob(), aad(issuerId));
         KeyFactory kf = KeyFactory.getInstance(blob.getAlgo(), "BC");
@@ -116,4 +129,40 @@ public class CaService {
                     .setProvider("BC").getCertificate(holder);
         }
     }
+
+    private void validateChain(CertificateEntity leaf) throws Exception {
+        CertificateEntity current = leaf;
+        X509Certificate prevCert = null; // za proveru potpisa prethodnog
+
+        while (current != null) {
+            X509Certificate cert = Pem.parseCert(current.getPem());
+
+            // check if the cert is expired
+            cert.checkValidity();
+
+            // check if the cert is revoked
+            if ("REVOKED".equalsIgnoreCase(current.getStatus())) {
+                throw new IllegalStateException("Certificate " + current.getId() + " is revoked");
+            }
+
+            // check if the cert signature is valid
+            if (prevCert != null) {
+                try {
+                    prevCert.verify(cert.getPublicKey()); // prevCert je issuer
+                } catch (Exception e) {
+                    throw new IllegalStateException("Certificate " + prevCert.getSerialNumber() +
+                            " failed signature verification for child " + cert.getSerialNumber(), e);
+                }
+            }
+
+            if (current.getIssuerId() == null) break;
+
+            prevCert = cert;
+            Long id = current.getIssuerId();
+            current = certRepo.findById(id)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Issuer not found for certId=" + id));
+        }
+    }
+
 }
