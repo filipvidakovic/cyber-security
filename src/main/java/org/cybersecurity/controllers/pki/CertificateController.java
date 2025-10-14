@@ -8,6 +8,9 @@ import org.cybersecurity.dto.pki.IssueEeAutogenReq;
 import org.cybersecurity.services.pki.CaService;
 import org.cybersecurity.services.pki.DownloadService;
 import org.cybersecurity.services.pki.EEIssueService;
+import org.cybersecurity.services.pki.RevocationService;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +18,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 
 @RestController
@@ -25,6 +31,7 @@ public class CertificateController {
     private final CaService ca;
     private final EEIssueService ee;
     private final DownloadService dl;
+    private final RevocationService rs;
 
     @PostMapping("/root")
     @PreAuthorize("hasAnyRole('ADMIN')")
@@ -67,4 +74,20 @@ public class CertificateController {
                 .contentType(MediaType.valueOf("application/x-pkcs12"))
                 .body(data);
     }
+
+    @PostMapping("/revoke")
+    public ResponseEntity<String> revoke(@RequestParam Long certId, @RequestParam int reasonCode) throws Exception {
+        rs.revokeCertificate(certId, reasonCode);
+        return ResponseEntity.ok("Certificate revoked successfully");
+    }
+
+    @GetMapping("/crls/{serial}.crl")
+    public ResponseEntity<Resource> getCrl(@PathVariable String serial) throws IOException {
+        Path file = Paths.get("../../crls", serial + ".crl");
+        Resource resource = new UrlResource(file.toUri());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, "application/pkix-crl")
+                .body(resource);
+    }
+
 }

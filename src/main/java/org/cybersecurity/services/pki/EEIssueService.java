@@ -31,10 +31,12 @@ public class EEIssueService {
     public Long issueAutogen(Long issuerId, String cn, Duration ttl, boolean storePrivKey) throws Exception {
         assertIssuerIsCA(issuerId);
         CertificateEntity issuer = certRepo.findById(issuerId).orElseThrow();
-        ensureIssuerValid(issuer, ttl);
+        validateChain(issuer);
         X509Certificate issuerCert = CaService.Pem.parseCert(issuer.getPem());
         PrivateKey issuerKey = loadIssuerPriv(issuerId);
 
+        Instant max = issuer.getNotAfter();
+        if (Instant.now().plus(ttl).isAfter(max)) throw new IllegalArgumentException("EE TTL exceeds issuer validity");
         String orgId = getOrgId(cn);
         // asserts that the organisations are the same if the issuer is CA_USER
         if (issuer.getType().equals("INT") && !issuer.getOrgId().equalsIgnoreCase(orgId)){
@@ -53,10 +55,12 @@ public class EEIssueService {
     public Long issueFromCsr(Long issuerId, byte[] csrPem, Duration ttl) throws Exception {
         assertIssuerIsCA(issuerId);
         CertificateEntity issuer = certRepo.findById(issuerId).orElseThrow();
-        ensureIssuerValid(issuer, ttl);
+        validateChain(issuer);
         X509Certificate issuerCert = CaService.Pem.parseCert(issuer.getPem());
         PrivateKey issuerKey = loadIssuerPriv(issuerId);
 
+        Instant max = issuer.getNotAfter();
+        if (Instant.now().plus(ttl).isAfter(max)) throw new IllegalArgumentException("EE TTL exceeds issuer validity");
         PKCS10CertificationRequest csr = crypto.parseCsr(csrPem);
         var spki = csr.getSubjectPublicKeyInfo();
         PublicKey pub = KeyFactory.getInstance("RSA", "BC")
@@ -72,11 +76,6 @@ public class EEIssueService {
         return saveCert(ee, "EE", issuerId, orgId);
     }
 
-    private void ensureIssuerValid(CertificateEntity issuer, Duration ttl) {
-        if (!"VALID".equals(issuer.getStatus())) throw new IllegalStateException("Issuer not VALID");
-        Instant max = issuer.getNotAfter();
-        if (Instant.now().plus(ttl).isAfter(max)) throw new IllegalArgumentException("EE TTL exceeds issuer validity");
-    }
 
     private Long saveCert(X509Certificate c, String type, Long issuerId, String orgId) throws Exception {
         CertificateEntity e = new CertificateEntity();
@@ -123,6 +122,41 @@ public class EEIssueService {
         RDN[] orgRdns = x500Name.getRDNs(BCStyle.O);
         String orgId = (orgRdns.length > 0) ? orgRdns[0].getFirst().getValue().toString() : null;
         return orgId;
+    }
+
+    private void validateChain(CertificateEntity leaf) throws Exception {
+        CertificateEntity current = leaf;
+        X509Certificate prevCert = null; // za proveru potpisa prethodnog
+
+        while (current != null) {
+            X509Certificate cert = CaService.Pem.parseCert(current.getPem());
+
+            // check if the cert is expired
+            cert.checkValidity();
+
+            // check if the cert is revoked
+            if ("REVOKED".equalsIgnoreCase(current.getStatus())) {
+                throw new IllegalStateException("Certificate " + current.getId() + " is revoked");
+            }
+
+            // check if the cert signature is valid
+            if (prevCert != null) {
+                try {
+                    prevCert.verify(cert.getPublicKey()); // prevCert je issuer
+                } catch (Exception e) {
+                    throw new IllegalStateException("Certificate " + prevCert.getSerialNumber() +
+                            " failed signature verification for child " + cert.getSerialNumber(), e);
+                }
+            }
+
+            if (current.getIssuerId() == null) break;
+
+            prevCert = cert;
+            Long id = current.getIssuerId();
+            current = certRepo.findById(id)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Issuer not found for certId=" + id));
+        }
     }
 
     private byte[] aad(Long id){
