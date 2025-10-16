@@ -20,8 +20,10 @@ public class CertificateEntity {
     @Column(nullable=false) private String status; // VALID, REVOKED
     @Lob @Column(nullable=false) private String pem;
 
+    private Instant revocationDate;
+    private Integer revocationReasonCode;
     private Long issuerId;
-    private Long orgId;
+    private String orgId;
 
     @PrePersist void onCreate(){ if (status==null) status = "VALID"; }
 }

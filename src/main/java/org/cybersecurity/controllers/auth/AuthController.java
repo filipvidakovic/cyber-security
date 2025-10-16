@@ -16,6 +16,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
 @RestController
 @RequiredArgsConstructor
 @CrossOrigin(origins="*")
@@ -28,6 +31,8 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
 
     private final JwtTokenUtil jwtTokenUtil;
+    private static final long TIME_15_MINUTES = 15 * 60 * 10000;
+    private static final long TIME_7_DAYS = 7 * 24 * 60 * 60 * 1000;
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponseDto> login(@RequestBody LoginDto request) {
@@ -39,16 +44,43 @@ public class AuthController {
 
         BaseUser authenticatedUser = userService.getUserByEmail(request.getEmail());
 
-        String token = jwtTokenUtil.generateToken(authenticatedUser.getEmail());
+
+        String accessToken = jwtTokenUtil.generateToken(authenticatedUser.getEmail(), TIME_15_MINUTES);
+        String refreshToken = jwtTokenUtil.generateToken(authenticatedUser.getEmail(), TIME_7_DAYS);
 
         return ResponseEntity.ok(new LoginResponseDto(authenticatedUser.getId(),
                 authenticatedUser.getEmail(),
-                token,
+                accessToken,
+                refreshToken,
                 authenticatedUser.getUserRole()));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<LoginResponseDto> refresh(@RequestBody Map<String, String> request) {
+        String refreshToken = request.get("refreshToken");
+
+        if (jwtTokenUtil.validateToken(refreshToken)) {
+            String username = jwtTokenUtil.extractUsername(refreshToken);
+
+            BaseUser user = userService.getUserByEmail(username);
+
+            String newAccessToken = jwtTokenUtil.generateToken(username, TIME_15_MINUTES);
+            String newRefreshToken = jwtTokenUtil.generateToken(username, TIME_7_DAYS);
+
+            return ResponseEntity.ok(new LoginResponseDto(
+                    user.getId(),
+                    user.getEmail(),
+                    newAccessToken,
+                    newRefreshToken,
+                    user.getUserRole()
+            ));
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
 
     @PostMapping("/signup")
     public ResponseEntity<Boolean> registerUser (@Valid @RequestBody RegisterUserDto registerUserDto) {
+        System.out.println(registerUserDto.getUserRole());
         return userService.registerUser(registerUserDto)
                 ? ResponseEntity.ok(true)
                 : ResponseEntity.badRequest().build();

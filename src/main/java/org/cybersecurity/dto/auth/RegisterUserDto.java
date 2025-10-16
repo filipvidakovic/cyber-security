@@ -20,7 +20,7 @@ public class RegisterUserDto {
     @Email(message = "Email is invalid")
     private String email;
     @NotBlank(message = "Password is required")
-    @Length(min = 6, max = 32, message = "Password must be at between 6 and 32 characters")
+    @Length(min = 8, max = 64, message = "Password must be at between 6 and 32 characters")
     private String password;
     @Enumerated(EnumType.STRING)
     private UserRole userRole;
