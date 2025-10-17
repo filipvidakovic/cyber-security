@@ -30,14 +30,14 @@ public class CaService {
     private final PrivateKeyRepository keyRepo;
 
     @Transactional
-    public Long createRoot(String cn, Duration ttl) throws Exception {
+    public Long createRoot(String cn, Duration ttl, String ownerEmail) throws Exception {
         System.out.println("Creating root certificate for " + cn);
         System.out.println(LocalDateTime.now());
         KeyPair kp = crypto.genRsa(4096);
         System.out.println(LocalDateTime.now());
         X509Certificate root = crypto.selfSignedCa(kp, new X500Name(cn), ttl);
         System.out.println(LocalDateTime.now());
-        Long certId = saveCert(root, "ROOT", null, getOrgId(cn));
+        Long certId = saveCert(root, "ROOT", null, getOrgId(cn), ownerEmail);
         System.out.println(LocalDateTime.now());
         saveKey(certId, kp.getPrivate(), 4096);
         System.out.println(LocalDateTime.now());
@@ -45,7 +45,7 @@ public class CaService {
     }
 
     @Transactional
-    public Long createIntermediate(Long issuerId, String cn, Duration ttl) throws Exception {
+    public Long createIntermediate(Long issuerId, String cn, Duration ttl, String ownerEmail) throws Exception {
         assertIssuerIsValid(issuerId);
         CertificateEntity issuer = certRepo.findById(issuerId).orElseThrow();
         validateChain(issuer);
@@ -62,12 +62,12 @@ public class CaService {
         KeyPair kp = crypto.genRsa(4096);
         X509Certificate child = crypto.signChild(kp.getPublic(),
                 new X500Name(cn), issuerCert, issuerKey, true, ttl);
-        Long certId = saveCert(child, "INT", issuerId, orgId);
+        Long certId = saveCert(child, "INT", issuerId, orgId, ownerEmail);
         saveKey(certId, kp.getPrivate(), 4096);
         return certId;
     }
 
-    private Long saveCert(X509Certificate c, String type, Long issuerId, String orgId) throws Exception {
+    private Long saveCert(X509Certificate c, String type, Long issuerId, String orgId, String ownerEmail) throws Exception {
         CertificateEntity e = new CertificateEntity();
         e.setType(type);
         e.setSubjectDn(c.getSubjectX500Principal().getName());
@@ -79,6 +79,7 @@ public class CaService {
         e.setIssuerId(issuerId);
         e.setStatus("VALID");
         e.setOrgId(orgId);
+        e.setOwnerEmail(ownerEmail);
         return certRepo.save(e).getId();
     }
 

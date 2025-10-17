@@ -16,6 +16,8 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
+
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +31,7 @@ public class DownloadService {
     /**
      * Kreira PKCS#12 fajl za dati certId (leaf cert + privatni ključ + chain ako postoji).
      */
+    @Transactional(readOnly = true)
     public byte[] downloadP12(Long certId, char[] password) throws Exception {
         // 1) Učitaj cert zapis iz baze
         CertificateEntity leafE = certRepo.findById(certId).orElseThrow();
