@@ -28,7 +28,7 @@ public class EEIssueService {
     private final PrivateKeyRepository keyRepo;
 
     @Transactional
-    public Long issueAutogen(Long issuerId, String cn, Duration ttl, boolean storePrivKey) throws Exception {
+    public Long issueAutogen(Long issuerId, String cn, Duration ttl, boolean storePrivKey, String ownerEmail) throws Exception {
         assertIssuerIsCA(issuerId);
         CertificateEntity issuer = certRepo.findById(issuerId).orElseThrow();
         validateChain(issuer);
@@ -46,13 +46,13 @@ public class EEIssueService {
         KeyPair kp = crypto.genRsa(3072);
         X509Certificate ee = crypto.signChild(kp.getPublic(), new X500Name(cn),
                 issuerCert, issuerKey, false, ttl);
-        Long id = saveCert(ee, "EE", issuerId, getOrgId(cn));
+        Long id = saveCert(ee, "EE", issuerId, getOrgId(cn), ownerEmail);
         if (storePrivKey) saveKey(id, kp.getPrivate(), 3072);
         return id;
     }
 
     @Transactional
-    public Long issueFromCsr(Long issuerId, byte[] csrPem, Duration ttl) throws Exception {
+    public Long issueFromCsr(Long issuerId, byte[] csrPem, Duration ttl, String ownerEmail) throws Exception {
         assertIssuerIsCA(issuerId);
         CertificateEntity issuer = certRepo.findById(issuerId).orElseThrow();
         validateChain(issuer);
@@ -73,11 +73,11 @@ public class EEIssueService {
         }
 
         X509Certificate ee = crypto.signChild(pub, csr.getSubject(), issuerCert, issuerKey, false, ttl);
-        return saveCert(ee, "EE", issuerId, orgId);
+        return saveCert(ee, "EE", issuerId, orgId, ownerEmail);
     }
 
 
-    private Long saveCert(X509Certificate c, String type, Long issuerId, String orgId) throws Exception {
+    private Long saveCert(X509Certificate c, String type, Long issuerId, String orgId, String ownerEmail) throws Exception {
         CertificateEntity e = new CertificateEntity();
         e.setType(type);
         e.setSubjectDn(c.getSubjectX500Principal().getName());
@@ -89,6 +89,7 @@ public class EEIssueService {
         e.setIssuerId(issuerId);
         e.setStatus("VALID");
         e.setOrgId(orgId);
+        e.setOwnerEmail(ownerEmail);
         return certRepo.save(e).getId();
     }
 
