@@ -24,4 +24,5 @@ public class BaseUser {
     private String organization;
     @Transient
     private String jwt;
+    private boolean enabled;
 }

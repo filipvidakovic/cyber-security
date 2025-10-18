@@ -42,4 +42,10 @@ public class UserService implements UserDetailsService {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with this email: " + email));
     }
+
+    public void enableUser(long userId) {
+        BaseUser user = userRepository.findById(userId).orElse(null);
+        if (user == null) return;
+        user.setEnabled(true);
+    }
 }

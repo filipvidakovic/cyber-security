@@ -7,6 +7,7 @@ import org.cybersecurity.dto.auth.LoginDto;
 import org.cybersecurity.dto.auth.LoginResponseDto;
 import org.cybersecurity.dto.auth.RegisterUserDto;
 import org.cybersecurity.model.user.BaseUser;
+import org.cybersecurity.repositories.user.EmailVerificationTokenRepository;
 import org.cybersecurity.services.user.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +26,7 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 @Validated
 public class AuthController {
+    private EmailVerificationTokenRepository tokenRepository;
 
     private final UserService userService;
 
@@ -85,4 +87,26 @@ public class AuthController {
                 ? ResponseEntity.ok(true)
                 : ResponseEntity.badRequest().build();
     }
+
+    @GetMapping("/confirm")
+    public ResponseEntity<String> confirmEmail(@RequestParam("token") String token) {
+        var optionalToken = tokenRepository.findByToken(token);
+        if (optionalToken.isEmpty()) {
+            return ResponseEntity.badRequest().body("Invalid token");
+        }
+
+        var verificationToken = optionalToken.get();
+        if (verificationToken.isExpired()) {
+            return ResponseEntity.status(HttpStatus.GONE).body("Token expired");
+        }
+
+        BaseUser user = verificationToken.getUser();
+        user.setEnabled(true);
+        userService.enableUser(user.getId());
+
+        tokenRepository.delete(verificationToken);
+
+        return ResponseEntity.ok("Email confirmed successfully! You can now log in.");
+    }
+
 }
