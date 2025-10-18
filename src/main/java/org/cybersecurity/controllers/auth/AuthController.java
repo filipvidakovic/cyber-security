@@ -3,17 +3,13 @@ package org.cybersecurity.controllers.auth;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.cybersecurity.config.jwt.JwtTokenUtil;
-import org.cybersecurity.dto.auth.LoginDto;
-import org.cybersecurity.dto.auth.LoginResponseDto;
-import org.cybersecurity.dto.auth.RegisterUserDto;
+import org.cybersecurity.dto.auth.*;
 import org.cybersecurity.model.user.BaseUser;
-import org.cybersecurity.repositories.user.EmailVerificationTokenRepository;
+import org.cybersecurity.services.user.EmailVerificationService;
 import org.cybersecurity.services.user.UserService;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
+import org.springframework.http.*;
+import org.springframework.security.authentication.*;
+import org.springframework.security.core.*;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -22,39 +18,58 @@ import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
-@CrossOrigin(origins="*")
+@CrossOrigin(origins = "*")
 @RequestMapping("/api/auth")
 @Validated
 public class AuthController {
-    private EmailVerificationTokenRepository tokenRepository;
 
     private final UserService userService;
-
+    private final EmailVerificationService emailVerificationService;
     private final AuthenticationManager authenticationManager;
-
     private final JwtTokenUtil jwtTokenUtil;
-    private static final long TIME_15_MINUTES = 15 * 60 * 10000;
+
+    private static final long TIME_15_MINUTES = 15 * 60 * 1000;
     private static final long TIME_7_DAYS = 7 * 24 * 60 * 60 * 1000;
+
+    @PostMapping("/signup")
+    public ResponseEntity<String> registerUser(@Valid @RequestBody RegisterUserDto dto) {
+        if (userService.registerUser(dto)) {
+            return ResponseEntity.ok("User registered. Please check your email to confirm your account.");
+        }
+        return ResponseEntity.badRequest().body("User registration failed.");
+    }
+
+    @GetMapping("/confirm")
+    public ResponseEntity<String> confirmEmail(@RequestParam("token") String token) {
+        boolean confirmed = emailVerificationService.confirmEmail(token);
+        return confirmed
+                ? ResponseEntity.ok("Email confirmed successfully! You can now log in.")
+                : ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid or expired token.");
+    }
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponseDto> login(@RequestBody LoginDto request) {
-        // Authenticate user
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
-
         BaseUser authenticatedUser = userService.getUserByEmail(request.getEmail());
 
+        if (!authenticatedUser.isEnabled()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(null);
+        }
 
         String accessToken = jwtTokenUtil.generateToken(authenticatedUser.getEmail(), TIME_15_MINUTES);
         String refreshToken = jwtTokenUtil.generateToken(authenticatedUser.getEmail(), TIME_7_DAYS);
 
-        return ResponseEntity.ok(new LoginResponseDto(authenticatedUser.getId(),
+        return ResponseEntity.ok(new LoginResponseDto(
+                authenticatedUser.getId(),
                 authenticatedUser.getEmail(),
                 accessToken,
                 refreshToken,
-                authenticatedUser.getUserRole()));
+                authenticatedUser.getUserRole()
+        ));
     }
 
     @PostMapping("/refresh")
@@ -63,7 +78,6 @@ public class AuthController {
 
         if (jwtTokenUtil.validateToken(refreshToken)) {
             String username = jwtTokenUtil.extractUsername(refreshToken);
-
             BaseUser user = userService.getUserByEmail(username);
 
             String newAccessToken = jwtTokenUtil.generateToken(username, TIME_15_MINUTES);
@@ -79,34 +93,4 @@ public class AuthController {
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
-
-    @PostMapping("/signup")
-    public ResponseEntity<Boolean> registerUser (@Valid @RequestBody RegisterUserDto registerUserDto) {
-        System.out.println(registerUserDto.getUserRole());
-        return userService.registerUser(registerUserDto)
-                ? ResponseEntity.ok(true)
-                : ResponseEntity.badRequest().build();
-    }
-
-    @GetMapping("/confirm")
-    public ResponseEntity<String> confirmEmail(@RequestParam("token") String token) {
-        var optionalToken = tokenRepository.findByToken(token);
-        if (optionalToken.isEmpty()) {
-            return ResponseEntity.badRequest().body("Invalid token");
-        }
-
-        var verificationToken = optionalToken.get();
-        if (verificationToken.isExpired()) {
-            return ResponseEntity.status(HttpStatus.GONE).body("Token expired");
-        }
-
-        BaseUser user = verificationToken.getUser();
-        user.setEnabled(true);
-        userService.enableUser(user.getId());
-
-        tokenRepository.delete(verificationToken);
-
-        return ResponseEntity.ok("Email confirmed successfully! You can now log in.");
-    }
-
 }

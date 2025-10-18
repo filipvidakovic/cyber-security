@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Getter
@@ -29,5 +30,12 @@ public class EmailVerificationToken {
 
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiryDate);
+    }
+    public static EmailVerificationToken create(BaseUser user, long expirationMinutes) {
+        return EmailVerificationToken.builder()
+                .token(UUID.randomUUID().toString())
+                .user(user)
+                .expiryDate(LocalDateTime.now().plusMinutes(expirationMinutes))
+                .build();
     }
 }

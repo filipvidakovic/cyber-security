@@ -24,5 +24,6 @@ public class BaseUser {
     private String organization;
     @Transient
     private String jwt;
+    @Column(nullable = false, columnDefinition = "boolean default true")
     private boolean enabled;
 }

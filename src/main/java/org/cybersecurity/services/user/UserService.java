@@ -6,6 +6,7 @@ import org.cybersecurity.mapper.auth.UserMapper;
 import org.cybersecurity.model.user.BaseUser;
 import org.cybersecurity.model.user.UserRole;
 import org.cybersecurity.repositories.user.UserRepository;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -19,6 +20,7 @@ import java.util.Optional;
 public class UserService implements UserDetailsService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailVerificationService emailVerificationService;
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         Optional<BaseUser> ret = userRepository.findByEmail(email);
@@ -32,11 +34,18 @@ public class UserService implements UserDetailsService {
         throw new UsernameNotFoundException("User not found with this email: " + email);
     }
 
-    public boolean registerUser(RegisterUserDto registerUserDto) {
-        registerUserDto.setPassword(passwordEncoder.encode(registerUserDto.getPassword()));
-        userRepository.save(UserMapper.toEntity(registerUserDto));
+    public boolean registerUser(RegisterUserDto dto) {
+        BaseUser newUser = new BaseUser();
+        newUser.setEmail(dto.getEmail());
+        newUser.setPassword(passwordEncoder.encode(dto.getPassword()));
+        newUser.setUserRole(dto.getUserRole());
+        newUser.setEnabled(false);
+        userRepository.save(newUser);
+
+        emailVerificationService.sendVerificationEmail(newUser);
         return true;
     }
+
 
     public BaseUser getUserByEmail(String email) {
         return userRepository.findByEmail(email)
