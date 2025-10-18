@@ -14,6 +14,7 @@ public class CertificateEntity {
     @Column(nullable=false) private String type; // ROOT, INT, EE
     @Column(nullable=false, length=1024) private String subjectDn;
     @Column(nullable=false, length=1024) private String issuerDn;
+    @Column(nullable = false) private String ownerEmail;
     @Column(nullable=false) private String serialHex;
     @Column(nullable=false) private Instant notBefore;
     @Column(nullable=false) private Instant notAfter;
