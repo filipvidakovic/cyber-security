@@ -33,14 +33,14 @@ public class CertificateController {
     @PreAuthorize("hasAnyRole('ADMIN')")
     public Long createRoot(@RequestBody @Valid CreateRootReq req) throws Exception {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        return ca.createRoot(req.getCn(), Duration.ofDays(req.getTtlDays()),email);
+        return ca.createRoot(req.getCn(), Duration.ofDays(req.getTtlDays()),email,req.getExtensions());
     }
 
     @PostMapping("/intermediate")
     @PreAuthorize("hasAnyRole('ADMIN','CA_USER')")
     public Long createInt(@RequestBody @Valid CreateIntReq req) throws Exception {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        return ca.createIntermediate(req.getIssuerId(), req.getCn(), Duration.ofDays(req.getTtlDays()),email);
+        return ca.createIntermediate(req.getIssuerId(), req.getCn(), Duration.ofDays(req.getTtlDays()),email,req.getExtensions());
     }
 
     @PostMapping("/ee/autogen")
@@ -52,7 +52,7 @@ public class CertificateController {
                 req.getCn(),
                 Duration.ofDays(req.getTtlDays()),
                 req.isStorePrivateKey(),
-                email
+                email, req.getExtensions()
         );
     }
 

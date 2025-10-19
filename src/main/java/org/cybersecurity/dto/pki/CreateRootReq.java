@@ -7,6 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.Map;
+
 @Getter
 @Setter
 @AllArgsConstructor
@@ -17,4 +19,6 @@ public class CreateRootReq {
 
     @Min(1)
     private int ttlDays;
+
+    private Map<String,String> extensions;
 }

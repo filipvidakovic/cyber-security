@@ -28,6 +28,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Date;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -39,12 +40,12 @@ public class CaService {
     private final CrlConfig crlConfig;
 
     @Transactional
-    public Long createRoot(String cn, Duration ttl, String ownerEmail) throws Exception {
+    public Long createRoot(String cn, Duration ttl, String ownerEmail, Map<String,String> extensions) throws Exception {
         System.out.println("Creating root certificate for " + cn);
         System.out.println(LocalDateTime.now());
         KeyPair kp = crypto.genRsa(4096);
         System.out.println(LocalDateTime.now());
-        X509Certificate root = crypto.selfSignedCa(kp, new X500Name(cn), ttl);
+        X509Certificate root = crypto.selfSignedCa(kp, new X500Name(cn), ttl, extensions);
         System.out.println(LocalDateTime.now());
         Long certId = saveCert(root, "ROOT", null, getOrgId(cn), ownerEmail);
         System.out.println(LocalDateTime.now());
@@ -58,7 +59,7 @@ public class CaService {
     }
 
     @Transactional
-    public Long createIntermediate(Long issuerId, String cn, Duration ttl, String ownerEmail) throws Exception {
+    public Long createIntermediate(Long issuerId, String cn, Duration ttl, String ownerEmail, Map<String,String> extensions) throws Exception {
         assertIssuerIsValid(issuerId);
         CertificateEntity issuer = certRepo.findById(issuerId).orElseThrow();
         validateChain(issuer);
@@ -73,7 +74,7 @@ public class CaService {
         PrivateKey issuerKey = loadIssuerPriv(issuerId);
         KeyPair kp = crypto.genRsa(4096);
         X509Certificate child = crypto.signChild(kp.getPublic(),
-                new X500Name(cn), issuerCert, issuerKey, true, ttl, issuerId);
+                new X500Name(cn), issuerCert, issuerKey, true, ttl, issuerId,  extensions);
         Long certId = saveCert(child, "INT", issuerId, orgId, ownerEmail);
         saveKey(certId, kp.getPrivate(), 4096);
 
