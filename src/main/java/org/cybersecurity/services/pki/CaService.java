@@ -4,6 +4,11 @@ import lombok.RequiredArgsConstructor;
 import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.style.BCStyle;
+import org.bouncycastle.cert.X509CRLHolder;
+import org.bouncycastle.cert.X509v2CRLBuilder;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.cybersecurity.config.security.CrlConfig;
 import org.cybersecurity.crypto.CryptoUtil;
 import org.cybersecurity.crypto.KeyVaultService;
 import org.cybersecurity.model.pki.CertificateEntity;
@@ -13,13 +18,16 @@ import org.cybersecurity.repositories.pki.PrivateKeyRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.*;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
-
-import static com.fasterxml.jackson.databind.type.LogicalType.DateTime;
+import java.util.Base64;
+import java.util.Date;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +36,7 @@ public class CaService {
     private final KeyVaultService vault;
     private final CertificateRepository certRepo;
     private final PrivateKeyRepository keyRepo;
+    private final CrlConfig crlConfig;
 
     @Transactional
     public Long createRoot(String cn, Duration ttl, String ownerEmail) throws Exception {
@@ -41,6 +50,10 @@ public class CaService {
         System.out.println(LocalDateTime.now());
         saveKey(certId, kp.getPrivate(), 4096);
         System.out.println(LocalDateTime.now());
+        //create empty crl file for new ca
+        CertificateEntity rootEntity = certRepo.findById(certId).orElseThrow();
+        generateEmptyCrl(rootEntity);
+        System.out.println("Root CA created with ID=" + certId + " and empty CRL generated.");
         return certId;
     }
 
@@ -58,12 +71,17 @@ public class CaService {
         }
         X509Certificate issuerCert = Pem.parseCert(issuer.getPem());
         PrivateKey issuerKey = loadIssuerPriv(issuerId);
-
         KeyPair kp = crypto.genRsa(4096);
         X509Certificate child = crypto.signChild(kp.getPublic(),
-                new X500Name(cn), issuerCert, issuerKey, true, ttl);
+                new X500Name(cn), issuerCert, issuerKey, true, ttl, issuerId);
         Long certId = saveCert(child, "INT", issuerId, orgId, ownerEmail);
         saveKey(certId, kp.getPrivate(), 4096);
+
+        // create empty crl file for new ca
+        CertificateEntity intEntity = certRepo.findById(certId).orElseThrow();
+        generateEmptyCrl(intEntity);
+        System.out.println("Intermediate CA created with ID=" + certId + " and empty CRL generated.");
+
         return certId;
     }
 
@@ -76,6 +94,7 @@ public class CaService {
         e.setNotBefore(c.getNotBefore().toInstant());
         e.setNotAfter(c.getNotAfter().toInstant());
         e.setPem(CryptoUtil.toPem(c));
+        System.out.println("Saving certificate with pem" + e.getPem());
         e.setIssuerId(issuerId);
         e.setStatus("VALID");
         e.setOrgId(orgId);
@@ -120,16 +139,55 @@ public class CaService {
     }
 
     // Mali helper za PEM → X509
+//    static class Pem {
+//        static X509Certificate parseCert(String pem) throws Exception {
+//            System.out.println(pem);
+//            String b64 = pem.replaceAll("-----\\w+-----", "")
+//                    .replaceAll("\\s", "");
+//            System.out.println(b64);
+//            byte[] der = java.util.Base64.getDecoder().decode(b64);
+//            var holder = new org.bouncycastle.cert.X509CertificateHolder(der);
+//            return new org.bouncycastle.cert.jcajce.JcaX509CertificateConverter()
+//                    .setProvider("BC").getCertificate(holder);
+//        }
+//    }
     static class Pem {
         static X509Certificate parseCert(String pem) throws Exception {
-            String b64 = pem.replaceAll("-----\\w+-----", "")
-                    .replaceAll("\\s", "");
-            byte[] der = java.util.Base64.getDecoder().decode(b64);
+            if (pem == null || pem.isBlank()) {
+                throw new IllegalArgumentException("Empty PEM input");
+            }
+
+            // 🔹 1. Normalizuj oznake bez razmaka (BEGINCERTIFICATE → BEGIN CERTIFICATE)
+            pem = pem.replaceAll("-----BEGINCERTIFICATE-----", "-----BEGIN CERTIFICATE-----")
+                    .replaceAll("-----ENDCERTIFICATE-----", "-----END CERTIFICATE-----");
+
+            // 🔹 2. Nađi prvi validan blok (ako ih ima više)
+            int start = pem.indexOf("-----BEGIN CERTIFICATE-----");
+            int end = pem.indexOf("-----END CERTIFICATE-----");
+            if (start == -1 || end == -1 || end <= start) {
+                throw new IllegalArgumentException("No valid PEM block found in input");
+            }
+
+            // 🔹 3. Izdvoji samo Base64 sadržaj između BEGIN i END
+            String b64 = pem.substring(start + "-----BEGIN CERTIFICATE-----".length(), end);
+            b64 = b64.replaceAll("\\s+", ""); // ukloni sve praznine, nove redove itd.
+
+            // 🔹 4. Validiraj Base64 (ako nije validan, odmah baci grešku)
+            byte[] der;
+            try {
+                der = Base64.getDecoder().decode(b64);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid Base64 content in PEM", e);
+            }
+
+            // 🔹 5. Parsiraj pomoću BouncyCastle-a
             var holder = new org.bouncycastle.cert.X509CertificateHolder(der);
             return new org.bouncycastle.cert.jcajce.JcaX509CertificateConverter()
-                    .setProvider("BC").getCertificate(holder);
+                    .setProvider("BC")
+                    .getCertificate(holder);
         }
     }
+
 
     private void validateChain(CertificateEntity leaf) throws Exception {
         CertificateEntity current = leaf;
@@ -165,5 +223,34 @@ public class CaService {
                             "Issuer not found for certId=" + id));
         }
     }
+
+    private void generateEmptyCrl(CertificateEntity issuer) throws Exception {
+        X509Certificate issuerCert = Pem.parseCert(issuer.getPem());
+        PrivateKey issuerKey = loadIssuerPriv(issuer.getId());
+
+        X500Name issuerName = new X500Name(issuerCert.getSubjectX500Principal().getName());
+        Instant now = Instant.now();
+
+        X509v2CRLBuilder crlBuilder = new X509v2CRLBuilder(issuerName, Date.from(now));
+        crlBuilder.setNextUpdate(Date.from(now.plus(Duration.ofDays(7))));
+
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA")
+                .setProvider("BC")
+                .build(issuerKey);
+
+        X509CRLHolder crlHolder = crlBuilder.build(signer);
+        byte[] crlBytes = crlHolder.getEncoded();
+
+        Path folder = Paths.get(crlConfig.getCrlFolder());
+        if (!Files.exists(folder)) Files.createDirectories(folder);
+
+        String filename = issuer.getType().equals("ROOT")
+                ? "root_" + issuer.getSerialHex() + ".crl"
+                : "ca_" + issuer.getId() + ".crl";
+
+        Files.write(folder.resolve(filename), crlBytes);
+        System.out.println("Empty CRL created for issuer: " + filename);
+    }
+
 
 }

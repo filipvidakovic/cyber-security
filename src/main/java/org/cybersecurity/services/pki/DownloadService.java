@@ -49,6 +49,7 @@ public class DownloadService {
 
         // 4) Sastavi lanac (leaf → issuer → ...), ako postoje roditelji u bazi
         List<X509Certificate> chain = buildChain(leafE);
+        chain.add(0, leaf);
 
         // 5) Spakuj u PKCS#12 i vrati bytes
         return keyStores.toPkcs12(priv, leaf, chain, password);

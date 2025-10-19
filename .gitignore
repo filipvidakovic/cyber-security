@@ -37,3 +37,10 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+
+.env
+
+src/main/resources/static/*
+!src/main/resources/static/
+!src/main/resources/static/**/

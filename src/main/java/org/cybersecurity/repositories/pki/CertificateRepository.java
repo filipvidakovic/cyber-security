@@ -2,6 +2,7 @@ package org.cybersecurity.repositories.pki;
 
 import org.bouncycastle.cert.cmp.CertificateStatus;
 import org.cybersecurity.dto.pki.CertificateDTO;
+import org.cybersecurity.dto.pki.IssuerDTO;
 import org.cybersecurity.model.pki.CertificateEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +35,12 @@ public interface CertificateRepository extends JpaRepository<CertificateEntity, 
              "FROM CertificateEntity c WHERE c.orgId = :orgId")
      List<CertificateDTO> findDTOsByOrgId(@Param("orgId") String orgId);
 
+     @Query("SELECT new org.cybersecurity.dto.pki.IssuerDTO(c.id, c.subjectDn, c.type) " +
+             "FROM CertificateEntity c " +
+             "WHERE c.type IN :types " +
+             "AND c.status = 'VALID' " +
+             "AND c.notAfter > CURRENT_TIMESTAMP")
+     List<IssuerDTO> findIssuerSummaries(@Param("types") List<String> types);
 
 }
 

@@ -44,6 +44,7 @@ public class WebSecurityConfiguration {
                 .csrf(csrf -> csrf.disable()) // Disable CSRF for simplicity (not recommended for production)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/crls/**").permitAll()
 
                         .anyRequest().permitAll())
                 .sessionManagement(session -> {

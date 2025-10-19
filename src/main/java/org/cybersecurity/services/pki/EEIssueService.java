@@ -45,7 +45,7 @@ public class EEIssueService {
 
         KeyPair kp = crypto.genRsa(3072);
         X509Certificate ee = crypto.signChild(kp.getPublic(), new X500Name(cn),
-                issuerCert, issuerKey, false, ttl);
+                issuerCert, issuerKey, false, ttl, issuerId);
         Long id = saveCert(ee, "EE", issuerId, getOrgId(cn), ownerEmail);
         if (storePrivKey) saveKey(id, kp.getPrivate(), 3072);
         return id;
@@ -72,7 +72,7 @@ public class EEIssueService {
             throw new IllegalArgumentException("Issuer " + issuerId + " does not match orgId " + orgId);
         }
 
-        X509Certificate ee = crypto.signChild(pub, csr.getSubject(), issuerCert, issuerKey, false, ttl);
+        X509Certificate ee = crypto.signChild(pub, csr.getSubject(), issuerCert, issuerKey, false, ttl, issuerId);
         return saveCert(ee, "EE", issuerId, orgId, ownerEmail);
     }
 
