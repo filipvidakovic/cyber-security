@@ -1,15 +1,16 @@
 package org.cybersecurity.crypto;
 
-import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.*;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.bouncycastle.util.io.pem.PemReader;
-import org.cybersecurity.config.security.CryptoConfig;
+import org.cybersecurity.config.security.CrlConfig;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.*;
@@ -18,13 +19,21 @@ import java.security.*;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Date;
 
 
 @Component
 public class CryptoUtil {
-    private String crlUrl = CryptoConfig.getCrlBaseUrl();
-    static { Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider()); }
+    private CrlConfig crlConfig;
+
+    @Autowired
+    public CryptoUtil(CrlConfig crlConfig) {
+        this.crlConfig = crlConfig;
+
+    }
+
+    static { Security.addProvider(new BouncyCastleProvider()); }
 
     public KeyPair genRsa(int bits) throws GeneralSecurityException {
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
@@ -44,7 +53,7 @@ public class CryptoUtil {
         b.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
         b.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.keyCertSign | KeyUsage.cRLSign));
 
-        String crl = crlUrl +  serial.toString(16) + ".crl";
+        String crl = crlConfig.getCrlBaseUrl() + "root_" + serial.toString(16) + ".crl";
 
         DistributionPointName distPointName = new DistributionPointName(
                 new GeneralNames(new GeneralName(GeneralName.uniformResourceIdentifier, crl))
@@ -63,7 +72,7 @@ public class CryptoUtil {
                                      X509Certificate issuerCert,
                                      PrivateKey issuerKey,
                                      boolean isCa,
-                                     Duration ttl) throws Exception {
+                                     Duration ttl, Long issuerId) throws Exception {
         Instant now = Instant.now();
         BigInteger serial = new BigInteger(64, new SecureRandom());
         JcaX509v3CertificateBuilder b = new JcaX509v3CertificateBuilder(
@@ -77,7 +86,7 @@ public class CryptoUtil {
                 : (KeyUsage.digitalSignature | KeyUsage.keyEncipherment);
         b.addExtension(Extension.keyUsage, true, new KeyUsage(ku));
 
-        String crl = crlUrl + issuerCert.getSerialNumber().toString(16) + ".crl";
+        String crl = crlConfig.getCrlBaseUrl() + "ca_" + issuerId.toString() + ".crl";
 
         DistributionPointName distPointName = new DistributionPointName(
                 new GeneralNames(new GeneralName(GeneralName.uniformResourceIdentifier, crl))
@@ -99,7 +108,6 @@ public class CryptoUtil {
     }
 
     public static String toPem(X509Certificate cert) throws Exception {
-        String base64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(cert.getEncoded());
-        return "-----START-----\n" + base64 + "\n-----END-----\n";
-    }
+        String base64 = Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(cert.getEncoded());
+        return "-----BEGIN CERTIFICATE-----\n" + base64 + "\n-----END CERTIFICATE-----\n";    }
 }
