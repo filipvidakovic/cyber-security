@@ -69,12 +69,23 @@ public class CertificateController {
     @PreAuthorize("hasAnyRole('ADMIN','CA_USER','USER')")
     public ResponseEntity<byte[]> p12(@PathVariable Long id,
                                       @RequestHeader("X-P12-Password") String pwd) throws Exception {
+        // If no key -> serve PEM instead of error
+        if (!dl.hasPrivateKey(id)) {
+            byte[] pem = dl.downloadPem(id);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"cert-" + id + ".pem\"")
+                    .contentType(MediaType.valueOf("application/x-pem-file"))
+                    .body(pem);
+        }
+
+        // Otherwise return the PKCS#12 as before
         byte[] data = dl.downloadP12(id, pwd.toCharArray());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"cert-" + id + ".p12\"")
                 .contentType(MediaType.valueOf("application/x-pkcs12"))
                 .body(data);
     }
+
 
     @PostMapping("/revoke")
     public ResponseEntity<String> revoke(@RequestParam Long certId, @RequestParam int reasonCode) throws Exception {

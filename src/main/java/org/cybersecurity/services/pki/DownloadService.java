@@ -9,6 +9,7 @@ import org.cybersecurity.repositories.pki.CertificateRepository;
 import org.cybersecurity.repositories.pki.PrivateKeyRepository;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -68,6 +69,17 @@ public class DownloadService {
             issuerId = issuer.getIssuerId();
         }
         return chain;
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasPrivateKey(Long certId) {
+        return keyRepo.findByCertId(certId).isPresent();
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] downloadPem(Long certId) throws Exception {
+        CertificateEntity e = certRepo.findById(certId).orElseThrow();
+        return e.getPem().getBytes(StandardCharsets.UTF_8);
     }
 
     /** Jednostavan PEM → X509 parser (BC). */
