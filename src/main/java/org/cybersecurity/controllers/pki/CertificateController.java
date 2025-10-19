@@ -2,16 +2,11 @@ package org.cybersecurity.controllers.pki;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.cybersecurity.dto.pki.CertificateDTO;
-import org.cybersecurity.dto.pki.CreateRootReq;
-import org.cybersecurity.dto.pki.CreateIntReq;
-import org.cybersecurity.dto.pki.IssueEeAutogenReq;
+import org.cybersecurity.dto.pki.*;
 import org.cybersecurity.services.pki.CaService;
 import org.cybersecurity.services.pki.DownloadService;
 import org.cybersecurity.services.pki.EEIssueService;
 import org.cybersecurity.services.pki.CertificateService;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,9 +15,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
 
@@ -35,6 +27,7 @@ public class CertificateController {
     private final EEIssueService ee;
     private final DownloadService dl;
     private final CertificateService cs;
+
 
     @PostMapping("/root")
     @PreAuthorize("hasAnyRole('ADMIN')")
@@ -89,15 +82,6 @@ public class CertificateController {
         return ResponseEntity.ok("Certificate revoked successfully");
     }
 
-    @GetMapping("/crls/{serial}.crl")
-    public ResponseEntity<Resource> getCrl(@PathVariable String serial) throws IOException {
-        Path file = Paths.get("../../crls", serial + ".crl");
-        Resource resource = new UrlResource(file.toUri());
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_TYPE, "application/pkix-crl")
-                .body(resource);
-    }
-
 
     @GetMapping("/admin")
     @PreAuthorize("hasRole('ADMIN')")
@@ -116,6 +100,14 @@ public class CertificateController {
     public ResponseEntity<List<CertificateDTO>> getUserCertificates() {
         return ResponseEntity.ok(cs.getUserCertificates());
     }
+
+    @GetMapping("/issuers")
+    public ResponseEntity<List<IssuerDTO>> getIssuers() {
+        return ResponseEntity.ok(cs.getPossibleIssuers());
+    }
+
+
+
 
 
 }

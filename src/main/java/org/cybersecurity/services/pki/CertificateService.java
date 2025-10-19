@@ -2,6 +2,7 @@ package org.cybersecurity.services.pki;
 
 import lombok.RequiredArgsConstructor;
 import org.cybersecurity.dto.pki.CertificateDTO;
+import org.cybersecurity.dto.pki.IssuerDTO;
 import org.cybersecurity.model.pki.CertificateEntity;
 import org.cybersecurity.model.user.BaseUser;
 import org.cybersecurity.repositories.pki.CertificateRepository;
@@ -96,21 +97,11 @@ public class CertificateService {
         return certRepo.findDTOsByOrgId(user.getOrganization());
     }
 
-    private CertificateDTO toDTO(CertificateEntity c) {
-        return new CertificateDTO(
-                c.getId(),
-                c.getType(),
-                c.getSubjectDn(),
-                c.getIssuerDn(),
-                c.getSerialHex(),
-                c.getNotBefore(),
-                c.getNotAfter(),
-                c.getStatus(),
-                c.getRevocationDate(),
-                c.getRevocationReasonCode(),
-                c.getOrgId()
-        );
+    public List<IssuerDTO> getPossibleIssuers() {
+        return certRepo.findIssuerSummaries(List.of("ROOT", "INT"));
     }
+
+
 
 
 }
