@@ -8,6 +8,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.Map;
+
 @Getter
 @Setter
 @AllArgsConstructor
@@ -23,5 +25,7 @@ public class IssueEeAutogenReq {
     private int ttlDays;
 
     private boolean storePrivateKey;
+
+    private Map<String,String> extensions;
 
 }

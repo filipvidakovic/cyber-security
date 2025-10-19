@@ -6,6 +6,7 @@ import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.cybersecurity.crypto.CryptoUtil;
+import org.cybersecurity.crypto.CsrUtil;
 import org.cybersecurity.crypto.KeyVaultService;
 import org.cybersecurity.model.pki.CertificateEntity;
 import org.cybersecurity.model.pki.PrivateKeyBlob;
@@ -18,6 +19,7 @@ import java.security.*;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -28,7 +30,7 @@ public class EEIssueService {
     private final PrivateKeyRepository keyRepo;
 
     @Transactional
-    public Long issueAutogen(Long issuerId, String cn, Duration ttl, boolean storePrivKey, String ownerEmail) throws Exception {
+    public Long issueAutogen(Long issuerId, String cn, Duration ttl, boolean storePrivKey, String ownerEmail, Map<String, String> extensions) throws Exception {
         assertIssuerIsCA(issuerId);
         CertificateEntity issuer = certRepo.findById(issuerId).orElseThrow();
         validateChain(issuer);
@@ -45,7 +47,7 @@ public class EEIssueService {
 
         KeyPair kp = crypto.genRsa(3072);
         X509Certificate ee = crypto.signChild(kp.getPublic(), new X500Name(cn),
-                issuerCert, issuerKey, false, ttl, issuerId);
+                issuerCert, issuerKey, false, ttl, issuerId, extensions);
         Long id = saveCert(ee, "EE", issuerId, getOrgId(cn), ownerEmail);
         if (storePrivKey) saveKey(id, kp.getPrivate(), 3072);
         return id;
@@ -72,7 +74,9 @@ public class EEIssueService {
             throw new IllegalArgumentException("Issuer " + issuerId + " does not match orgId " + orgId);
         }
 
-        X509Certificate ee = crypto.signChild(pub, csr.getSubject(), issuerCert, issuerKey, false, ttl, issuerId);
+        Map<String,String> requested = CsrUtil.extractExtensions(csr);
+
+        X509Certificate ee = crypto.signChild(pub, csr.getSubject(), issuerCert, issuerKey, false, ttl, issuerId, requested);
         return saveCert(ee, "EE", issuerId, orgId, ownerEmail);
     }
 
