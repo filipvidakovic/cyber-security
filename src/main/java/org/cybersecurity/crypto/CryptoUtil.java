@@ -83,8 +83,8 @@ public class CryptoUtil {
         }
 
         // ---- CRL DP (non-critical)
-        addCrlDistributionPoint(b, issuerId);
-
+        addRootCrlDistributionPoint(b,serial);
+        
         // ---- Apply user extensions (after guards)
         ExtensionUtil.apply(b, extensions, /*isCa*/ true);
 
@@ -214,8 +214,27 @@ public class CryptoUtil {
                 }
         );
         builder.addExtension(Extension.cRLDistributionPoints, false, crlDistPoint);
-        System.out.println("Added CRL DP for ROOT: " + crlUrl);
+        System.out.println("Added CRL DP for CA: " + crlUrl);
 
     }
+
+    private void addRootCrlDistributionPoint(JcaX509v3CertificateBuilder builder, BigInteger serial) throws Exception {
+        String crlUrl = crlConfig.getCrlBaseUrl() + "root_" + serial.toString(16);
+
+        DistributionPointName distPointName = new DistributionPointName(
+                new GeneralNames(new GeneralName(GeneralName.uniformResourceIdentifier, crlUrl))
+        );
+
+        CRLDistPoint crlDistPoint = new CRLDistPoint(
+                new DistributionPoint[] {
+                        new DistributionPoint(distPointName, null, null)
+                }
+        );
+
+        builder.addExtension(Extension.cRLDistributionPoints, false, crlDistPoint);
+
+        System.out.println("Added CRL DP for ROOT: " + crlUrl);
+    }
+
 
 }

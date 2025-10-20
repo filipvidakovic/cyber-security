@@ -25,15 +25,33 @@ public class CrlController {
     @GetMapping("/{ca_id}")
     public ResponseEntity<?> downloadCrl(@PathVariable("ca_id") String caIdParam) {
         System.out.println(">>> CRL endpoint hit for issuer: " + caIdParam);
-
         try {
-            Long issuerId = Long.parseLong(caIdParam.substring(3));
-            byte[] crlBytes = crlService.generateCrl(issuerId);
+            if (caIdParam.startsWith("root_")) {
+                String serial = caIdParam.substring(5);
+                byte[] crlBytes = crlService.generateRootCrl(serial);
 
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"crl-ca-" + issuerId + ".crl\"")
-                    .contentType(MediaType.valueOf("application/pkix-crl"))
-                    .body(crlBytes);
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.CONTENT_DISPOSITION,
+                                "attachment; filename=\"crl-root-" + serial + ".crl\"")
+                        .contentType(MediaType.valueOf("application/pkix-crl"))
+                        .body(crlBytes);
+            }
+
+            if (caIdParam.startsWith("ca_")) {
+                String idPart = caIdParam.substring(3);
+                Long issuerId = Long.parseLong(idPart);
+                byte[] crlBytes = crlService.generateCrl(issuerId);
+
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.CONTENT_DISPOSITION,
+                                "attachment; filename=\"crl-ca-" + issuerId + ".crl\"")
+                        .contentType(MediaType.valueOf("application/pkix-crl"))
+                        .body(crlBytes);
+            }
+
+            return ResponseEntity.badRequest()
+                    .body(("Invalid CA ID format: " + caIdParam
+                            + ". Expected 'root_<serial>' or 'ca_<id>'.").getBytes());
 
         } catch (NumberFormatException e) {
             System.err.println("Invalid CA ID format: " + caIdParam);
