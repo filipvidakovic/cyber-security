@@ -1,9 +1,10 @@
 package org.cybersecurity.controllers.template;
 
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.cybersecurity.model.template.CertificateTemplate;
+import org.cybersecurity.services.template.TemplateService;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/templates")
