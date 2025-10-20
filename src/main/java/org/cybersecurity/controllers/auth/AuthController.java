@@ -76,21 +76,31 @@ public class AuthController {
     public ResponseEntity<LoginResponseDto> refresh(@RequestBody Map<String, String> request) {
         String refreshToken = request.get("refreshToken");
 
-        if (jwtTokenUtil.validateToken(refreshToken)) {
-            String username = jwtTokenUtil.extractUsername(refreshToken);
-            BaseUser user = userService.getUserByEmail(username);
-
-            String newAccessToken = jwtTokenUtil.generateToken(username, TIME_15_MINUTES);
-            String newRefreshToken = jwtTokenUtil.generateToken(username, TIME_7_DAYS);
-
-            return ResponseEntity.ok(new LoginResponseDto(
-                    user.getId(),
-                    user.getEmail(),
-                    newAccessToken,
-                    newRefreshToken,
-                    user.getUserRole()
-            ));
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return ResponseEntity.badRequest().build();
         }
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        if (!jwtTokenUtil.validateToken(refreshToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String username = jwtTokenUtil.extractUsername(refreshToken);
+        BaseUser user = userService.getUserByEmail(username);
+
+        if (user == null || !user.isEnabled()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        String newAccessToken = jwtTokenUtil.generateToken(username, TIME_15_MINUTES);
+        String newRefreshToken = jwtTokenUtil.generateToken(username, TIME_7_DAYS);
+
+        return ResponseEntity.ok(new LoginResponseDto(
+                user.getId(),
+                user.getEmail(),
+                newAccessToken,
+                newRefreshToken,
+                user.getUserRole()
+        ));
     }
+
 }
