@@ -41,13 +41,13 @@ public class CaService {
     public Long createRoot(String cn, Duration ttl, String ownerEmail, Map<String,String> extensions) throws Exception {
         System.out.println("Creating root certificate for " + cn);
         System.out.println(LocalDateTime.now());
-        KeyPair kp = crypto.genRsa(4096);
+        KeyPair kp = crypto.genRsa(3072);
         System.out.println(LocalDateTime.now());
         X509Certificate root = crypto.selfSignedCa(kp, new X500Name(cn), ttl, extensions,null);
         System.out.println(LocalDateTime.now());
         Long certId = saveCert(root, "ROOT", null, getOrgId(cn), ownerEmail);
         System.out.println(LocalDateTime.now());
-        saveKey(certId, kp.getPrivate(), 4096);
+        saveKey(certId, kp.getPrivate(), 3072);
         System.out.println(LocalDateTime.now());
         System.out.println("Root CA created with ID=" + certId);
         return certId;
@@ -67,11 +67,11 @@ public class CaService {
         }
         X509Certificate issuerCert = Pem.parseCert(issuer.getPem());
         PrivateKey issuerKey = loadIssuerPriv(issuerId);
-        KeyPair kp = crypto.genRsa(4096);
+        KeyPair kp = crypto.genRsa(2048);
         X509Certificate child = crypto.signChild(kp.getPublic(),
                 new X500Name(cn), issuerCert, issuerKey, true, ttl, issuerId,  extensions);
         Long certId = saveCert(child, "INT", issuerId, orgId, ownerEmail);
-        saveKey(certId, kp.getPrivate(), 4096);
+        saveKey(certId, kp.getPrivate(), 2048);
 
         System.out.println("Intermediate CA created with ID=" + certId);
 
