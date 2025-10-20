@@ -8,7 +8,6 @@ import org.bouncycastle.cert.X509CRLHolder;
 import org.bouncycastle.cert.X509v2CRLBuilder;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.cybersecurity.config.security.CrlConfig;
 import org.cybersecurity.crypto.CryptoUtil;
 import org.cybersecurity.crypto.KeyVaultService;
 import org.cybersecurity.model.pki.CertificateEntity;
@@ -37,7 +36,6 @@ public class CaService {
     private final KeyVaultService vault;
     private final CertificateRepository certRepo;
     private final PrivateKeyRepository keyRepo;
-    private final CrlConfig crlConfig;
 
     @Transactional
     public Long createRoot(String cn, Duration ttl, String ownerEmail, Map<String,String> extensions) throws Exception {
@@ -45,16 +43,13 @@ public class CaService {
         System.out.println(LocalDateTime.now());
         KeyPair kp = crypto.genRsa(4096);
         System.out.println(LocalDateTime.now());
-        X509Certificate root = crypto.selfSignedCa(kp, new X500Name(cn), ttl, extensions);
+        X509Certificate root = crypto.selfSignedCa(kp, new X500Name(cn), ttl, extensions,null);
         System.out.println(LocalDateTime.now());
         Long certId = saveCert(root, "ROOT", null, getOrgId(cn), ownerEmail);
         System.out.println(LocalDateTime.now());
         saveKey(certId, kp.getPrivate(), 4096);
         System.out.println(LocalDateTime.now());
-        //create empty crl file for new ca
-        CertificateEntity rootEntity = certRepo.findById(certId).orElseThrow();
-        generateEmptyCrl(rootEntity);
-        System.out.println("Root CA created with ID=" + certId + " and empty CRL generated.");
+        System.out.println("Root CA created with ID=" + certId);
         return certId;
     }
 
@@ -78,10 +73,7 @@ public class CaService {
         Long certId = saveCert(child, "INT", issuerId, orgId, ownerEmail);
         saveKey(certId, kp.getPrivate(), 4096);
 
-        // create empty crl file for new ca
-        CertificateEntity intEntity = certRepo.findById(certId).orElseThrow();
-        generateEmptyCrl(intEntity);
-        System.out.println("Intermediate CA created with ID=" + certId + " and empty CRL generated.");
+        System.out.println("Intermediate CA created with ID=" + certId);
 
         return certId;
     }
@@ -110,8 +102,15 @@ public class CaService {
         b.setCertId(certId); b.setAlgo(priv.getAlgorithm()); b.setKeySize(size); b.setEncBlob(blob);
         keyRepo.save(b);
     }
-
+    @Transactional(readOnly = true)
     public PrivateKey loadIssuerPriv(Long issuerId) throws Exception {
+        var cert = certRepo.findById(issuerId)
+                .orElseThrow(() -> new IllegalArgumentException("Issuer certificate not found: " + issuerId));
+
+        if ("REVOKED".equalsIgnoreCase(cert.getStatus())) {
+            throw new IllegalStateException("Private key for revoked certificate (ID=" + issuerId + ") must not be used.");
+        }
+
         var blob = keyRepo.findByCertId(issuerId).orElseThrow();
         byte[] pkcs8 = vault.decrypt(blob.getEncBlob(), aad(issuerId));
         KeyFactory kf = KeyFactory.getInstance(blob.getAlgo(), "BC");
@@ -223,34 +222,6 @@ public class CaService {
                     .orElseThrow(() -> new IllegalArgumentException(
                             "Issuer not found for certId=" + id));
         }
-    }
-
-    private void generateEmptyCrl(CertificateEntity issuer) throws Exception {
-        X509Certificate issuerCert = Pem.parseCert(issuer.getPem());
-        PrivateKey issuerKey = loadIssuerPriv(issuer.getId());
-
-        X500Name issuerName = new X500Name(issuerCert.getSubjectX500Principal().getName());
-        Instant now = Instant.now();
-
-        X509v2CRLBuilder crlBuilder = new X509v2CRLBuilder(issuerName, Date.from(now));
-        crlBuilder.setNextUpdate(Date.from(now.plus(Duration.ofDays(7))));
-
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA")
-                .setProvider("BC")
-                .build(issuerKey);
-
-        X509CRLHolder crlHolder = crlBuilder.build(signer);
-        byte[] crlBytes = crlHolder.getEncoded();
-
-        Path folder = Paths.get(crlConfig.getCrlFolder());
-        if (!Files.exists(folder)) Files.createDirectories(folder);
-
-        String filename = issuer.getType().equals("ROOT")
-                ? "root_" + issuer.getSerialHex() + ".crl"
-                : "ca_" + issuer.getId() + ".crl";
-
-        Files.write(folder.resolve(filename), crlBytes);
-        System.out.println("Empty CRL created for issuer: " + filename);
     }
 
 
