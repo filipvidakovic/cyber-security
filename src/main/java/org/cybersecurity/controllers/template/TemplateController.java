@@ -3,6 +3,7 @@ package org.cybersecurity.controllers.template;
 import org.cybersecurity.model.template.CertificateTemplate;
 import org.cybersecurity.services.template.TemplateService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,11 +19,13 @@ public class TemplateController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','CA_USER')")
     public ResponseEntity<List<CertificateTemplate>> listTemplates() {
         return ResponseEntity.ok(service.getAllTemplates());
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','CA_USER')")
     public ResponseEntity<CertificateTemplate> getTemplateById(@PathVariable Long id) {
         return service.getTemplateById(id)
                 .map(ResponseEntity::ok)
@@ -30,12 +33,14 @@ public class TemplateController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','CA_USER')")
     public ResponseEntity<CertificateTemplate> createTemplate(@RequestBody CertificateTemplate dto) {
         CertificateTemplate created = service.createTemplate(dto);
         return ResponseEntity.ok(created);
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','CA_USER')")
     public ResponseEntity<CertificateTemplate> updateTemplate(@PathVariable Long id, @RequestBody CertificateTemplate dto) {
         try {
             CertificateTemplate updated = service.updateTemplate(id, dto);
@@ -46,6 +51,7 @@ public class TemplateController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','CA_USER')")
     public ResponseEntity<Void> deleteTemplate(@PathVariable Long id) {
         try {
             service.deleteTemplate(id);
