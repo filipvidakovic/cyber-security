@@ -181,7 +181,6 @@ public class CryptoUtil {
     private static void validateExtensions(Map<String, String> extensions, boolean isCa) {
         String ku = extensions.get(Extension.keyUsage.getId());
         String bc = extensions.get(Extension.basicConstraints.getId());
-        String eku = extensions.get(Extension.extendedKeyUsage.getId());
 
         if (!isCa) {
             if (ku != null) {
@@ -192,11 +191,6 @@ public class CryptoUtil {
             }
             if (bc != null && bc.toLowerCase().contains("ca:true")) {
                 throw new IllegalArgumentException("End-entity certificate cannot set BasicConstraints CA:true.");
-            }
-        } else {
-            // Optional, but recommended: block EKU on CA certs
-            if (eku != null && !eku.isBlank()) {
-                throw new IllegalArgumentException("ExtendedKeyUsage is not allowed on CA certificates.");
             }
         }
     }
