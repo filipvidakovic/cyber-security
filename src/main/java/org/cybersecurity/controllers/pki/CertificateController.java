@@ -3,10 +3,7 @@ package org.cybersecurity.controllers.pki;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.cybersecurity.dto.pki.*;
-import org.cybersecurity.services.pki.CaService;
-import org.cybersecurity.services.pki.DownloadService;
-import org.cybersecurity.services.pki.EEIssueService;
-import org.cybersecurity.services.pki.CertificateService;
+import org.cybersecurity.services.pki.*;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -65,25 +62,35 @@ public class CertificateController {
         return ee.issueFromCsr(issuerId, csr.getBytes(), Duration.ofDays(ttlDays),email);
     }
 
-    @GetMapping("/{id}/download.p12")
+    @GetMapping("/{id}/download")
     @PreAuthorize("hasAnyRole('ADMIN','CA_USER','USER')")
-    public ResponseEntity<byte[]> p12(@PathVariable Long id,
-                                      @RequestHeader("X-P12-Password") String pwd) throws Exception {
-        // If no key -> serve PEM instead of error
-        if (!dl.hasPrivateKey(id)) {
+    public ResponseEntity<byte[]> downloadCert(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-P12-Password", required = false) String pwd
+    ) throws Exception {
+        boolean hasKey = dl.hasPrivateKey(id);
+        System.out.println("HAS KEY "+hasKey);
+
+        if (!hasKey) {
+            // return certificate pem
             byte[] pem = dl.downloadPem(id);
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"cert-" + id + ".pem\"")
                     .contentType(MediaType.valueOf("application/x-pem-file"))
                     .body(pem);
-        }
+        } else {
+            // return .p12 with certificate and private key
+            if (pwd == null || pwd.isBlank()) {
+                return ResponseEntity.badRequest()
+                        .body("Missing X-P12-Password header.".getBytes());
+            }
 
-        // Otherwise return the PKCS#12 as before
-        byte[] data = dl.downloadP12(id, pwd.toCharArray());
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"cert-" + id + ".p12\"")
-                .contentType(MediaType.valueOf("application/x-pkcs12"))
-                .body(data);
+            byte[] p12 = dl.downloadP12(id, pwd.toCharArray());
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"cert-" + id + ".p12\"")
+                    .contentType(MediaType.valueOf("application/x-pkcs12"))
+                    .body(p12);
+        }
     }
 
 

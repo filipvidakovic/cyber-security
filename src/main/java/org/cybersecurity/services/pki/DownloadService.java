@@ -76,11 +76,29 @@ public class DownloadService {
         return keyRepo.findByCertId(certId).isPresent();
     }
 
+//    @Transactional(readOnly = true)
+//    public byte[] downloadPem(Long certId) throws Exception {
+//        CertificateEntity e = certRepo.findById(certId).orElseThrow();
+//        return e.getPem().getBytes(StandardCharsets.UTF_8);
+//    }
     @Transactional(readOnly = true)
     public byte[] downloadPem(Long certId) throws Exception {
-        CertificateEntity e = certRepo.findById(certId).orElseThrow();
-        return e.getPem().getBytes(StandardCharsets.UTF_8);
+        CertificateEntity leafE = certRepo.findById(certId)
+                .orElseThrow(() -> new IllegalArgumentException("Certificate not found: " + certId));
+
+        StringBuilder pemChain = new StringBuilder(leafE.getPem()).append("\n");
+        Long issuerId = leafE.getIssuerId();
+        while (issuerId != null) {
+            CertificateEntity issuer = certRepo.findById(issuerId).orElse(null);
+            if (issuer == null) break;
+            pemChain.append(issuer.getPem()).append("\n");
+            if (issuer.getIssuerId() == null) break;
+            issuerId = issuer.getIssuerId();
+        }
+
+        return pemChain.toString().getBytes(StandardCharsets.UTF_8);
     }
+
 
     /** Jednostavan PEM → X509 parser (BC). */
     private static X509Certificate parseCert(String pem) throws Exception {
