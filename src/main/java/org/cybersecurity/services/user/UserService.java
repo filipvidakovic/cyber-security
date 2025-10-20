@@ -36,6 +36,9 @@ public class UserService implements UserDetailsService {
 
     public boolean registerUser(RegisterUserDto dto) {
         BaseUser newUser = new BaseUser();
+        newUser.setFirstName(dto.getFirstName());
+        newUser.setLastName(dto.getLastName());
+        newUser.setOrganization(dto.getOrganization());        
         newUser.setEmail(dto.getEmail());
         newUser.setPassword(passwordEncoder.encode(dto.getPassword()));
         newUser.setUserRole(dto.getUserRole());
