@@ -1,5 +1,6 @@
 package org.cybersecurity.config.jwt;
 
+import com.auth0.jwt.exceptions.JWTDecodeException;
 import com.auth0.jwt.exceptions.TokenExpiredException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -30,7 +31,8 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        if (request.getRequestURI().equals("/api/auth/login")) {
+        if (request.getRequestURI().equals("/api/auth/login") ||
+                request.getRequestURI().equals("/api/auth/refresh")) {
             chain.doFilter(request, response);
             return;
         }
@@ -40,30 +42,36 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             String requestTokenHeader = request.getHeader("Authorization");
             String username = null;
             String jwtToken = null;
-            if (requestTokenHeader != null && requestTokenHeader.contains("Bearer")) {
-                jwtToken = requestTokenHeader.substring(requestTokenHeader.indexOf("Bearer ") + 7);
-                System.out.println(">>>>>JWT TOKEN: " + jwtToken);
-                try {
-                    username = jwtTokenUtil.extractUsername(jwtToken);
-                    UserDetails userDetails = this.jwtUserDetailsService.loadUserByUsername(username);
-                    if (jwtTokenUtil.validateToken(jwtToken, userDetails)) {
-                        UsernamePasswordAuthenticationToken authToken =
-                                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                        SecurityContextHolder.getContext().setAuthentication(authToken);
-                        System.out.println("Auth OK: email={}, authorities={}"+
-                                userDetails.getUsername()+
-                                userDetails.getAuthorities());
+            if (requestTokenHeader != null && requestTokenHeader.startsWith("Bearer ")) {
+                jwtToken = requestTokenHeader.substring(7).trim(); // get the actual token
+                if (!jwtToken.isEmpty() && !"null".equals(jwtToken)) {
+                    try {
+                        username = jwtTokenUtil.extractUsername(jwtToken);
+                        UserDetails userDetails = this.jwtUserDetailsService.loadUserByUsername(username);
+                        if (jwtTokenUtil.validateToken(jwtToken, userDetails)) {
+                            UsernamePasswordAuthenticationToken authToken =
+                                    new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                            SecurityContextHolder.getContext().setAuthentication(authToken);
+                            System.out.println("Auth OK: email={}, authorities={}"+ userDetails.getUsername()+ userDetails.getAuthorities());
+                        }
+                    } catch (IllegalArgumentException e) {
+                        logger.warn("Unable to get JWT Token.");
+                    } catch (TokenExpiredException ex) {
+                        logger.info("JWT Token expired! Refreshing...");
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        response.getWriter().write("Token expired");
+                        return;
+                    } catch (JWTDecodeException ex) {
+                        logger.warn("JWT Token is invalid: {}");
                     }
-
-                } catch (IllegalArgumentException e) {
-                    logger.warn("Unable to get JWT Token.");
-                } catch(TokenExpiredException ex) {
-                    logger.error("JWT Token expired!");
+                } else {
+                    logger.warn("JWT Token is empty or null string.");
                 }
             } else {
                 logger.warn("JWT Token does not exist.");
             }
+
         }
         chain.doFilter(request, response);
     }
