@@ -45,7 +45,7 @@ public class CryptoUtil {
             KeyPair kp,
             X500Name subject,
             Duration ttl,
-            Map<String, String> extensions
+            Map<String, String> extensions, Long issuerId
     ) throws Exception {
         Instant now = Instant.now();
         BigInteger serial = new BigInteger(64, new SecureRandom());
@@ -83,13 +83,7 @@ public class CryptoUtil {
         }
 
         // ---- CRL DP (non-critical)
-        String crl = crlConfig.getCrlBaseUrl() + "root_" + serial.toString(16) + ".crl";
-        DistributionPointName dpn = new DistributionPointName(
-                new GeneralNames(new GeneralName(GeneralName.uniformResourceIdentifier, crl)));
-        CRLDistPoint crlDistPoint = new CRLDistPoint(new DistributionPoint[] {
-                new DistributionPoint(dpn, null, null)
-        });
-        b.addExtension(Extension.cRLDistributionPoints, false, crlDistPoint);
+        addCrlDistributionPoint(b, issuerId);
 
         // ---- Apply user extensions (after guards)
         ExtensionUtil.apply(b, extensions, /*isCa*/ true);
@@ -146,13 +140,7 @@ public class CryptoUtil {
         }
 
         // ---- CRL DP (non-critical)
-        String crl = crlConfig.getCrlBaseUrl() + "ca_" + issuerId + ".crl";
-        DistributionPointName dpn = new DistributionPointName(
-                new GeneralNames(new GeneralName(GeneralName.uniformResourceIdentifier, crl)));
-        CRLDistPoint crlDistPoint = new CRLDistPoint(new DistributionPoint[] {
-                new DistributionPoint(dpn, null, null)
-        });
-        b.addExtension(Extension.cRLDistributionPoints, false, crlDistPoint);
+        addCrlDistributionPoint(b, issuerId);
 
         // ---- Apply user extensions (after guards)
         ExtensionUtil.apply(b, extensions, isCa);
@@ -212,4 +200,22 @@ public class CryptoUtil {
             }
         }
     }
+
+    private void addCrlDistributionPoint(JcaX509v3CertificateBuilder builder, Long issuerId) throws Exception {
+        String crlUrl = crlConfig.getCrlBaseUrl() + "ca_" + issuerId;
+
+        DistributionPointName distPointName = new DistributionPointName(
+                new GeneralNames(new GeneralName(GeneralName.uniformResourceIdentifier, crlUrl))
+        );
+
+        CRLDistPoint crlDistPoint = new CRLDistPoint(
+                new DistributionPoint[] {
+                        new DistributionPoint(distPointName, null, null)
+                }
+        );
+        builder.addExtension(Extension.cRLDistributionPoints, false, crlDistPoint);
+        System.out.println("Added CRL DP for ROOT: " + crlUrl);
+
+    }
+
 }

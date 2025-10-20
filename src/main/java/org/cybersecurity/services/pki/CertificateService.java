@@ -46,19 +46,8 @@ public class CertificateService {
             cert.setRevocationDate(Instant.now());
             cert.setRevocationReasonCode(reasonCode);
             certRepo.save(cert);
-
-            // Disable or delete the private key
-            keyRepo.findByCertId(certId).ifPresent(keyBlob -> {
-                keyBlob.setEncBlob(null);
-                keyRepo.save(keyBlob);
-            });
-
             System.out.println("Certificate " + certId + " revoked for reason code " + reasonCode);
 
-            if (cert.getIssuerId() != null) {
-                crlService.buildCrl(cert.getIssuerId());
-                System.out.println("CRL updated for issuer " + cert.getIssuerId());
-            }
         }
 
         // Revoke all children recursively

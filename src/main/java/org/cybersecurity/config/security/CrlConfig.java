@@ -7,21 +7,16 @@ import org.springframework.stereotype.Component;
 public class CrlConfig {
 
     private final String crlBaseUrl;
-    private final String crlFolder;
 
     public CrlConfig(
-            @Value("${pki.crl.base-url}") String crlBaseUrl,
-            @Value("${pki.crl.folder}") String crlFolder
+            @Value("${pki.crl.base-url}") String crlBaseUrl
     ) {
         this.crlBaseUrl = crlBaseUrl;
-        this.crlFolder = crlFolder;
     }
 
     public String getCrlBaseUrl() {
         return crlBaseUrl;
     }
 
-    public String getCrlFolder() {
-        return crlFolder;
-    }
+
 }
